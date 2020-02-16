@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Multiplayer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css?family=Poppins');
+
+        html, body {
+            font-family: 'Poppins', sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .uiContainer {
+            width: 100%;
+            position: fixed;
+            z-index: 200;
+        }
+
+        #playerShow {
+            margin: 5vh auto;
+            text-align: center;
+            font-size: 1.4rem;
+        }
+    </style>
+  </head>
+  <body>
+    <div class="uiContainer">
+        <p id="playerShow"></p>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/p5@0.10.2/lib/p5.js"></script>
+    <script>
+        let connectedPlayers = {};
+        let playerDirection = [0, 0];
+
+        (function () {
+            let $ = (e) => document.querySelector(e)
+            let socket = io('/game')
+
+            socket.on('connect', () => {
+
+                $("#playerShow").innerHTML = socket.id
+
+                let axis = {x: 0, y: 1}
+                let keyMap = {
+                    ArrowUp:    {axis: axis.y, dir: -1},
+                    ArrowDown:  {axis: axis.y, dir: 1},
+                    ArrowLeft:  {axis: axis.x, dir: -1},
+                    ArrowRight: {axis: axis.x, dir: 1},
+                    KeyW: {axis: axis.y, dir: -1},
+                    KeyS: {axis: axis.y, dir: 1},
+                    KeyA: {axis: axis.x, dir: -1},
+                    KeyD: {axis: axis.x, dir: 1}
+                }
+
+                document.body.addEventListener('keydown', (e) => {
+                    if (keyMap[e.code]) {
+                        playerDirection[keyMap[e.code].axis] = keyMap[e.code].dir
+
+                        socket.emit('change-position', {direction: playerDirection})
+                    }
+                });
+
+                document.body.addEventListener("keyup", function (e) {
+                    if (keyMap[e.code]) {
+                        playerDirection[keyMap[e.code].axis] = 0
+
+                        socket.emit('change-position', {direction: playerDirection})
+                    }
+                });
+
+                socket.on('new-player-joined-room', function(data) {
+                    if( data.id == socket.id ) {
+                        socket.emit('get-all-players-in-room', {}, function (r) {
+                            connectedPlayers = r
+                        })
+                    } else {
+                        connectedPlayers[data.id] = data
+                    }
+                })
+
+                socket.on('position-changed', function(data) {
+                    connectedPlayers[data.id].coords.x = data.coords.x
+                    connectedPlayers[data.id].coords.y = data.coords.y
+                })
+
+                socket.on('player-disconnected', function(id) {
+                    delete connectedPlayers[id]
+                })
+            })
+        })()
+
+        function setup() {
+            
+            var canvas = createCanvas(windowWidth, windowHeight );
+            canvas.style('display', 'block');
+
+            frameRate(60);
+            smooth();
+            strokeWeight(0);
+        }
+
+        function draw() {
+            clear();
+            for (var connPlayer in connectedPlayers) {
+                let p = connectedPlayers[connPlayer]
+                
+                fill(p.color[0], p.color[1], p.color[2]);
+                ellipse(p.coords.x, p.coords.y, p.size, p.size);
+            }
+        }
+
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+        }
+    </script>
+  </body>
+</html>
